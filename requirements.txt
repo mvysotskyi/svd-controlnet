@@ -1,9 +1,7 @@
-diffusers
+torchvision
 transformers
 accelerate
+diffusers
 einops
 opencv-python
-decord
 imageio
-xformers
-torchvision

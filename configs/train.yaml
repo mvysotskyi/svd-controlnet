@@ -14,7 +14,7 @@ adam_epsilon: 1e-8
 pretrained_model_name_or_path: "stabilityai/stable-video-diffusion-img2vid-xt"
 revision: null
 pretrain_unet: null
-video_folder: "output_video"
+video_folder: "dataset"
 width: 512
 height: 512
 num_workers: 8

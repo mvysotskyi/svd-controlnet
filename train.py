@@ -130,14 +130,9 @@ def run_training_pipeline():
         if cfg.output_dir is not None:
             os.makedirs(cfg.output_dir, exist_ok=True)
 
-    clip_feature_extractor = CLIPImageProcessor.from_pretrained(
-        cfg.pretrained_model_name_or_path, subfolder="feature_extractor", revision=cfg.revision
-    )
-    clip_image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-        cfg.pretrained_model_name_or_path, subfolder="image_encoder", revision=cfg.revision, variant="fp16"
-    )
-    kl_temporal_decoder_vae = AutoencoderKLTemporalDecoder.from_pretrained(
-        cfg.pretrained_model_name_or_path, subfolder="vae", revision=cfg.revision, variant="fp16")
+    clip_feature_extractor = CLIPImageProcessor.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="feature_extractor", revision=cfg.revision)
+    clip_image_encoder = CLIPVisionModelWithProjection.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="image_encoder", revision=cfg.revision, variant="fp16")
+    vae = AutoencoderKLTemporalDecoder.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="vae", revision=cfg.revision, variant="fp16")
     spatio_temporal_unet = UNetSpatioTemporalConditionControlNetModel.from_pretrained(
         cfg.pretrained_model_name_or_path if cfg.pretrain_unet is None else cfg.pretrain_unet,
         subfolder="unet",
@@ -148,7 +143,7 @@ def run_training_pipeline():
     print("Loading ControlNet model...")
     controlnet_model: ControlNetSDVModel = ControlNetSDVModel.from_unet(spatio_temporal_unet)
 
-    kl_temporal_decoder_vae.requires_grad_(False)
+    vae.requires_grad_(False)
     clip_image_encoder.requires_grad_(False)
     spatio_temporal_unet.requires_grad_(False)
 
@@ -159,7 +154,7 @@ def run_training_pipeline():
         precision_dtype = torch.bfloat16
 
     clip_image_encoder.to(accelerator.device, dtype=precision_dtype)
-    kl_temporal_decoder_vae.to(accelerator.device, dtype=precision_dtype)
+    vae.to(accelerator.device, dtype=precision_dtype)
     spatio_temporal_unet.to(accelerator.device, dtype=precision_dtype)
 
 
@@ -245,7 +240,7 @@ def run_training_pipeline():
                 pixel_values_batch = batch_data["pixel_values"].to(precision_dtype).to(
                     accelerator.device, non_blocking=True
                 )
-                latents_batch = convert_tensor_to_vae_latent(pixel_values_batch, kl_temporal_decoder_vae)
+                latents_batch = convert_tensor_to_vae_latent(pixel_values_batch, vae)
 
                 noise_tensor = torch.randn_like(latents_batch)
                 batch_size_val = latents_batch.shape[0]
@@ -258,7 +253,7 @@ def run_training_pipeline():
                 training_noise_aug_val = 0.02
                 small_noise_latents_batch = latents_batch + noise_tensor * training_noise_aug_val
                 conditional_latents_batch = small_noise_latents_batch[:, 0, :, :, :]
-                conditional_latents_batch = conditional_latents_batch / kl_temporal_decoder_vae.config.scaling_factor
+                conditional_latents_batch = conditional_latents_batch / vae.config.scaling_factor
 
 
                 noisy_latents_batch  = latents_batch + noise_tensor * sigmas_reshaped
